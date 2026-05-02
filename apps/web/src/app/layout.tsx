@@ -21,6 +21,9 @@ export const metadata: Metadata = {
     template: "%s | OrchestraGrant",
   },
   description: "Grant management platform for performing arts organizations",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
