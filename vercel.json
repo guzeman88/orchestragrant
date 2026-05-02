@@ -1,3 +1,6 @@
 {
-  "rootDirectory": "apps/web"
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @orchestragrant/web build",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs"
 }
