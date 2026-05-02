@@ -93,42 +93,42 @@ export type SubscriptionTier =
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  first_name: string;
+  last_name: string;
   role: UserRole;
-  orgId: string;
-  isActive: boolean;
-  isMfaEnabled: boolean;
-  avatarUrl?: string;
-  lastLoginAt?: string;
-  createdAt: string;
-  updatedAt: string;
+  org_id: string;
+  is_active: boolean;
+  is_mfa_enabled: boolean;
+  avatar_url?: string;
+  last_login_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Organization {
   id: string;
   name: string;
-  legalName: string;
+  legal_name: string;
   ein: string;
-  orgType: OrgType;
-  subscriptionTier: SubscriptionTier;
-  subscriptionStatus: "active" | "trialing" | "past_due" | "canceled";
-  stripeCustomerId?: string;
-  logoUrl?: string;
+  org_type: OrgType;
+  subscription_tier: SubscriptionTier;
+  subscription_status: "active" | "trialing" | "past_due" | "canceled";
+  stripe_customer_id?: string;
+  logo_url?: string;
   website?: string;
-  primaryEmail: string;
+  primary_email: string;
   phone?: string;
-  addressStreet?: string;
-  addressCity?: string;
-  addressState?: string;
-  addressZip?: string;
-  foundedYear?: number;
-  budgetSize?: number;
-  staffCount?: number;
-  isOnboarded: boolean;
-  profileCompletenessScore: number;
-  createdAt: string;
-  updatedAt: string;
+  address_street?: string;
+  address_city?: string;
+  address_state?: string;
+  address_zip?: string;
+  founded_year?: number;
+  budget_size?: number;
+  staff_count?: number;
+  is_onboarded: boolean;
+  profile_completeness_score: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface OrgProfile {
@@ -172,111 +172,113 @@ export interface Funder {
 
 export interface Grant {
   id: string;
-  funderId: string;
+  funder_id: string;
   funder?: Funder;
   title: string;
   description?: string;
   type: GrantType;
-  eligibleOrgTypes: OrgType[];
-  minAmount?: number;
-  maxAmount?: number;
-  typicalAmount?: number;
+  eligible_org_types: OrgType[];
+  min_amount?: number;
+  max_amount?: number;
+  typical_amount?: number;
   deadline?: string;
-  cycleFrequency?: "annual" | "biannual" | "rolling" | "one_time";
-  applicationUrl?: string;
-  loiRequired: boolean;
-  reportingRequired: boolean;
-  matchRequired: boolean;
-  matchPercentage?: number;
-  geographicRestrictions?: string[];
-  budgetSizeMin?: number;
-  budgetSizeMax?: number;
-  isActive: boolean;
-  isVerified: boolean;
-  lastVerifiedAt?: string;
+  cycle_frequency?: "annual" | "biannual" | "rolling" | "one_time";
+  application_url?: string;
+  loi_required: boolean;
+  reporting_required: boolean;
+  match_required: boolean;
+  match_percentage?: number;
+  geographic_restrictions?: string[];
+  budget_size_min?: number;
+  budget_size_max?: number;
+  is_active: boolean;
+  is_verified: boolean;
+  last_verified_at?: string;
+  arts_specific?: boolean;
   notes?: string;
   tagline?: string;
   source?: "candid" | "grants_gov" | "scraped" | "manual";
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Application {
   id: string;
-  orgId: string;
-  grantId: string;
+  org_id: string;
+  grant_id: string;
   grant?: Grant;
   title: string;
   stage: ApplicationStage;
-  requestedAmount?: number;
-  awardedAmount?: number;
-  submissionDeadline?: string;
-  submittedAt?: string;
-  outcomeAt?: string;
-  reportingDeadline?: string;
-  projectTitle?: string;
-  projectDescription?: string;
-  assignedTo?: string;
-  assignedUser?: User;
+  requested_amount?: number;
+  awarded_amount?: number;
+  submission_deadline?: string;
+  submitted_at?: string;
+  outcome_at?: string;
+  reporting_deadline?: string;
+  project_title?: string;
+  project_description?: string;
+  assigned_to?: string;
+  assigned_user?: User;
   priority?: "low" | "medium" | "high" | "critical";
-  internalNotes?: string;
+  internal_notes?: string;
   tags?: string[];
-  stageHistory?: StageHistoryEntry[];
+  stage_history?: StageHistoryEntry[];
   sections?: ApplicationSection[];
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface StageHistoryEntry {
-  fromStage: ApplicationStage | null;
-  toStage: ApplicationStage;
-  changedBy: string;
-  changedAt: string;
+  from_stage: ApplicationStage | null;
+  to_stage: ApplicationStage;
+  changed_by: string;
+  changed_at: string;
   note?: string;
 }
 
 export interface ApplicationSection {
   id: string;
-  applicationId: string;
+  application_id: string;
   title: string;
   prompt?: string;
   content?: string; // JSON (ProseMirror doc) or plain text
-  wordLimit?: number;
-  charLimit?: number;
-  isRequired: boolean;
-  sortOrder: number;
+  word_limit?: number;
+  char_limit?: number;
+  is_required: boolean;
+  sort_order: number;
   status: "not_started" | "in_progress" | "complete" | "approved";
-  lastEditedBy?: string;
-  lockedBy?: string;
-  lockedAt?: string;
-  updatedAt: string;
+  last_edited_by?: string;
+  locked_by?: string;
+  locked_at?: string;
+  updated_at: string;
 }
 
 export interface OrgDocument {
   id: string;
-  orgId: string;
+  org_id: string;
   category: DocumentCategory;
-  fileName: string;
-  fileKey: string; // S3 key
-  fileSizeBytes?: number;
-  mimeType?: string;
-  uploadedBy: string;
-  uploadedAt: string;
-  processedAt?: string;
-  processingStatus: "pending" | "processing" | "complete" | "failed";
-  extractedTextLength?: number;
+  file_name: string;
+  file_key: string; // S3 key
+  file_size_bytes?: number;
+  mime_type?: string;
+  uploaded_by: string;
+  uploaded_at: string;
+  processed_at?: string;
+  processing_status: "pending" | "processing" | "complete" | "failed";
+  extracted_text_length?: number;
   year?: number;
   description?: string;
   tags?: string[];
+  created_at?: string;
 }
 
 export interface Deadline {
   id: string;
-  orgId: string;
-  applicationId?: string;
-  grantId?: string;
+  org_id: string;
+  application_id?: string;
+  grant_id?: string;
   title: string;
-  deadlineAt: string;
+  deadline_at: string;
   type:
     | "application"
     | "loi"
@@ -284,11 +286,11 @@ export interface Deadline {
     | "award_decision"
     | "meeting"
     | "other";
-  reminderDays: number[];
+  reminder_days: number[];
   notes?: string;
-  isCompleted: boolean;
-  completedAt?: string;
-  createdAt: string;
+  is_completed: boolean;
+  completed_at?: string;
+  created_at: string;
 }
 
 export interface Award {

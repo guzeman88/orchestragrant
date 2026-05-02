@@ -94,7 +94,7 @@ export default function DashboardPage() {
 
   const activeCount = allApps.filter((a) => ACTIVE_STAGES.includes(a.stage)).length;
   const awardedApps = allApps.filter((a) => a.stage === AWARDED_STAGE);
-  const totalAwarded = awardedApps.reduce((sum, a) => sum + (a.award_amount ?? 0), 0);
+  const totalAwarded = awardedApps.reduce((sum, a) => sum + (a.awarded_amount ?? 0), 0);
   const submittedCount = allApps.filter((a) =>
     ["submitted", "under_review", "awarded", "declined"].includes(a.stage)
   ).length;

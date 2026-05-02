@@ -4,7 +4,7 @@ import type {
   RefreshTokenResponse,
   User,
   Organization,
-  OrgProfileRead,
+  OrgProfile,
   PaginatedResponse,
   Grant,
   Application,
