@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Refined warm-off-white surface */
+    --background: 36 33% 97%;
+    --foreground: 222 39% 12%;
+
+    /* Pure white cards with crisp contrast */
+    --card: 0 0% 100%;
+    --card-foreground: 222 39% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 39% 12%;
+
+    /* Burgundy primary — #7B1F3A */
+    --primary: 345 59% 30%;
+    --primary-foreground: 36 33% 97%;
+
+    /* Gold secondary — #C9A84C */
+    --secondary: 42 51% 55%;
+    --secondary-foreground: 222 39% 12%;
+
+    /* Subtle muted surfaces */
+    --muted: 220 17% 95%;
+    --muted-foreground: 220 12% 52%;
+
+    --accent: 36 60% 95%;
+    --accent-foreground: 345 59% 28%;
+
+    --destructive: 0 78% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Thin refined borders */
+    --border: 220 18% 90%;
+    --input: 220 18% 90%;
+    --ring: 345 59% 30%;
+
+    --radius: 0.625rem;
+
+    /* Sidebar */
+    --sidebar: 222 40% 14%;
+    --sidebar-foreground: 210 20% 92%;
+    --sidebar-border: 222 30% 20%;
+    --sidebar-accent: 222 35% 20%;
+    --sidebar-accent-active: 345 59% 30%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  /* Premium custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+
+  /* Thin horizontal rules */
+  hr {
+    @apply border-border;
+  }
+}
+
+@layer utilities {
+  /* Glass effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Subtle inner shadow for depth */
+  .shadow-inset-sm {
+    box-shadow: inset 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  }
+
+  /* Gold shimmer on hover */
+  .shimmer-gold {
+    background: linear-gradient(90deg, transparent 0%, rgba(201,168,76,0.15) 50%, transparent 100%);
+    background-size: 200% 100%;
+  }
+}

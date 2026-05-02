@@ -1,0 +1,258 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options: [staging, prod]
+      image_tag:
+        description: "Docker image tag to deploy (defaults to commit SHA)"
+        required: false
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPO_PREFIX: orchestragrant
+
+jobs:
+  # ── Determine target environment ───────────────────────────────────────────
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      image_tag:   ${{ steps.env.outputs.image_tag }}
+    steps:
+      - id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          else
+            ENV="staging"
+          fi
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ github.sha }}"
+          fi
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "image_tag=$TAG" >> $GITHUB_OUTPUT
+
+  # ── Build & push Docker images to ECR ──────────────────────────────────────
+  build-and-push:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: api
+            dockerfile: infrastructure/docker/api.Dockerfile
+            context: apps/api
+          - name: ai-service
+            dockerfile: infrastructure/docker/ai-service.Dockerfile
+            context: apps/ai-service
+          - name: discovery
+            dockerfile: infrastructure/docker/discovery.Dockerfile
+            context: apps/discovery-service
+          - name: web
+            dockerfile: infrastructure/docker/web.Dockerfile
+            context: .
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.service.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context:    ${{ matrix.service.context }}
+          file:       ${{ matrix.service.dockerfile }}
+          push:       true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_PREFIX }}/${{ matrix.service.name }}:${{ needs.setup.outputs.image_tag }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_PREFIX }}/${{ matrix.service.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.service.name }}
+          cache-to:   type=gha,mode=max,scope=${{ matrix.service.name }}
+
+  # ── Run DB migrations via one-off ECS task ─────────────────────────────────
+  migrate:
+    needs: [setup, build-and-push]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Run Alembic migrations
+        run: |
+          ENV="${{ needs.setup.outputs.environment }}"
+          CLUSTER="orchestragrant-${ENV}-cluster"
+          TASK_DEF="orchestragrant-${ENV}-api"
+          SUBNET_IDS=$(aws ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "orchestragrant-${ENV}-api" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.subnets' \
+            --output text)
+          SG_IDS=$(aws ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "orchestragrant-${ENV}-api" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups' \
+            --output text)
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$TASK_DEF" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${SUBNET_IDS}],securityGroups=[${SG_IDS}],assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides":[{"name":"api","command":["alembic","upgrade","head"]}]}' \
+            --query 'tasks[0].taskArn' \
+            --output text)
+
+          echo "Migration task: $TASK_ARN"
+
+          # Wait for task to stop
+          aws ecs wait tasks-stopped \
+            --cluster "$CLUSTER" \
+            --tasks "$TASK_ARN"
+
+          # Check exit code
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "$CLUSTER" \
+            --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+
+          echo "Migration exit code: $EXIT_CODE"
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migration failed!"
+            exit 1
+          fi
+
+  # ── Update ECS services with new image ─────────────────────────────────────
+  deploy:
+    needs: [setup, migrate]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.environment }}
+    strategy:
+      matrix:
+        service: [api, web, ai, discovery, celery]
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Update ECS service — ${{ matrix.service }}
+        run: |
+          ENV="${{ needs.setup.outputs.environment }}"
+          CLUSTER="orchestragrant-${ENV}-cluster"
+          SERVICE="orchestragrant-${ENV}-${{ matrix.service }}"
+          TAG="${{ needs.setup.outputs.image_tag }}"
+
+          # Map service → image name
+          case "${{ matrix.service }}" in
+            ai)       IMG="ai-service" ;;
+            discovery) IMG="discovery" ;;
+            celery)   IMG="api" ;;        # celery reuses api image
+            *)        IMG="${{ matrix.service }}" ;;
+          esac
+
+          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_PREFIX }}/${IMG}:${TAG}"
+
+          # Get current task definition
+          TASK_DEF=$(aws ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+          # Register new task definition with updated image
+          NEW_TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition "$TASK_DEF" \
+            --query 'taskDefinition' \
+            | jq --arg IMAGE "$IMAGE" \
+                 --arg SVC "${{ matrix.service }}" \
+              '.containerDefinitions |= map(if .name == $SVC then .image = $IMAGE else . end)
+               | {family: .family, taskRoleArn: .taskRoleArn, executionRoleArn: .executionRoleArn,
+                  networkMode: .networkMode, containerDefinitions: .containerDefinitions,
+                  requiresCompatibilities: .requiresCompatibilities, cpu: .cpu, memory: .memory}')
+
+          NEW_ARN=$(echo "$NEW_TASK_DEF" | aws ecs register-task-definition \
+            --cli-input-json /dev/stdin \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "Registered: $NEW_ARN"
+
+          # Update service
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "$NEW_ARN" \
+            --force-new-deployment
+
+      - name: Wait for ${{ matrix.service }} to stabilize
+        if: matrix.service != 'celery'
+        run: |
+          ENV="${{ needs.setup.outputs.environment }}"
+          CLUSTER="orchestragrant-${ENV}-cluster"
+          SERVICE="orchestragrant-${ENV}-${{ matrix.service }}"
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          echo "${{ matrix.service }} deployed successfully"
+
+  # ── Smoke test ────────────────────────────────────────────────────────────
+  smoke-test:
+    needs: [setup, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Health check
+        run: |
+          ENV="${{ needs.setup.outputs.environment }}"
+          if [ "$ENV" = "prod" ]; then
+            URL="https://api.orchestragrant.com/health"
+          else
+            URL="https://staging-api.orchestragrant.com/health"
+          fi
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i: status $STATUS — waiting 10s..."
+            sleep 10
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1
